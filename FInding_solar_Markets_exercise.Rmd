@@ -1,0 +1,150 @@
+---
+title: "FInding solar markets for investment, using html tables, GIS, and Twitter - an exercise"
+author: "Ram A. Barankin"
+date: "2/24/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## The goal
+Demonstrate data acquisition, data preparation, data analysis and visualization.
+
+(For required files: <https://github.com/RamBarankin/Solar_Market.git>).
+
+## Data types
+- Local GIS shapefile
+- HTML table (scraped from the web)
+- Twitter data (API using the "twitteR" package)
+
+## The exercise
+Find the best place to invest in current patterns according to local climate, current electricity prices, and attitude toward climate change.
+
+###1. Load general packages
+```{r packages}
+library(XML)
+library(dplyr)
+```
+
+###2. Find lat/long of cities (see GIS shapefile in the folder)
+```{r LatLong}
+library(raster)
+cities <- tbl_df(shapefile("Solar_Market/US_cities/US_cities.shp")) 
+cities <- cities %>%  plyr::rename(c("ycoord"="LAT")) %>% plyr::rename(c("xcoord"="LONG")) %>% 
+  filter(CLASS=="city") %>% dplyr::select(NAME, ST, LAT, LONG)
+```
+This is the resulted dataframe:
+```{r LatLong Table, echo=FALSE}
+cities
+```
+
+###3. Get average electricity prices
+```{r prices}
+library(RCurl)
+data <- getURL("https://www.eia.gov/electricity/monthly/epm_table_grapher.cfm?t=epmt_5_6_a", ssl.verifypeer = FALSE)
+perftable <- readHTMLTable(data[[1]], stringsAsFactors = T)
+elctprice <- perftable[[2]]
+elctprice <- tbl_df(elctprice[,c(1,10)])
+colnames(elctprice) <- c("State", "Price")
+```
+This is the resulted dataframe:
+```{r prices Table, echo=FALSE}
+elctprice
+```
+
+###4. Add State's abbreviation (to have a common column for the two dataframes)
+```{r abb}
+us <- readHTMLTable("http://www.softschools.com/social_studies/state_abbreviations/",  
+                    header=T, which=1,stringsAsFactors=F, trim = T, skip.rows = 3)
+colnames(us) <- us[3,]
+us <- tbl_df(us[4:nrow(us),])
+elctprice <- elctprice %>% mutate(State=toupper(State)) %>%
+  left_join(us) %>% dplyr::select(Abbreviation, Price) %>% plyr::rename(c("Abbreviation"="ST")) %>% na.omit()
+```
+This is the resulted dataframe:
+```{r prices Table2, echo=FALSE}
+elctprice
+```
+
+###5. Merge all and produce the index
+```{r merge}
+cities <- cities %>% left_join(elctprice)
+cities$Price <- as.numeric(cities$Price)
+cities <- cities %>% na.omit() %>% mutate(idx_SUN = scale(LAT), idx_SUN=idx_SUN+abs(min(idx_SUN)),
+                            idx_PRICE = scale(Price), idx_PRICE=idx_PRICE+abs(min(idx_PRICE)),
+                            Market_Potential_Index = idx_SUN+idx_PRICE)
+Market_Potential <- quantile(cities$Market_Potential_Index)
+for (i in 1:nrow(cities)){
+if (cities$Market_Potential_Index[i]<=Market_Potential[2]){cities$Market_Potential[i]<-"High"} else{
+  if(cities$Market_Potential_Index[i]>Market_Potential[2]&cities$Market_Potential_Index[i]<=Market_Potential[3]){ cities$Market_Potential[i]<-"Medium"} else{
+    cities$Market_Potential[i]<-"Low"}}}
+  
+cities$Market_Potential_Index <- -cities$Market_Potential_Index+9
+```
+This is the resulted dataframe:
+```{r Index, echo=FALSE}
+cities
+```
+###6. Map
+```{r map}
+df <- cities
+df <- df%>% plyr::rename(c("Market_Potential_Index"="Solar Market Potential index"))%>%
+  plyr::rename(c("Market_Potential"="Market Potential Level")) %>% 
+  plyr::rename(c("Price"="Electricity Price (Cents per KW)"))
+map <- shapefile("Solar_Market//US_cities/US_cities.shp")
+map <- merge(map, df)
+
+map1 <- map[,c(1,2, 54, 57,58)]
+map1 <- map1[na.omit(map1),]
+library(mapview)
+m <- mapview(map1, legend=T, zcol="Solar Market Potential index")
+```
+The map:
+```{r map1, echo=F}
+m
+```
+
+###7. Discover attitudes using twitter
+```{r twit, eval = FALSE}
+library(twitteR)
+# setup_twitter_oauth (use yourown credentials)
+cities <- cities[order(-cities$Market_Potential_Index),]
+poten_cities <- cities[1:10,] # The cities with highest potential
+# prepare Twitter parameters:
+poten_cities$LatLong <- paste0(poten_cities$LAT, ",", poten_cities$LONG,
+                               ", ", " 2mi") #location
+date = as.character(Sys.Date()) # Today's date
+poten_cities$Twitnum <- 0 # the variable to be used to count tweats
+for (i in 1:nrow(poten_cities)){
+  tw = searchTwitter('#climatechange', n = 1e4, since = date, geocode=poten_cities$LatLong[i])
+  poten_cities$Twitnum[i] <- length(tw)
+  } #get and store the # of tweats
+poten_cities$Potential <- scale(poten_cities$Twitnum) #standardize the # of tweats 
+poten_cities <- poten_cities[order(-poten_cities$Potential),]#order cities according to tweets
+```
+The resulting dataframe:
+```{r tweattable, echo=F}
+load('Solar_Market/potencities.rda')
+poten_cities
+```
+
+###8. Visualize 
+```{r tweatgraph1}
+library(plotly)
+poten_cities$NAME <- factor(poten_cities$NAME, levels = poten_cities[["NAME"]])
+
+p <- plot_ly(poten_cities, x=~poten_cities$NAME ,y=~poten_cities$Potential, type="bar", 
+        marker = list(color = 'rgb(158,202,225)', range ("-1", "-0.5", "Mean", "0.5", "1"),
+                      line = list(color = 'rgb(8,48,107)', width = 1.5))) %>%
+  layout(title = "Solar Market Potential - Twitter Analysis",
+         xaxis = list(title = ""),
+         yaxis = list(title = "#climatechange Tweets Relative to the Mean"))
+       
+```      
+The graph:
+```{r tweatgraph, echo=F}
+p
+```
+
