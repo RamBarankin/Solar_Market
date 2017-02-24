@@ -31,7 +31,7 @@ library(dplyr)
 ###2. Find lat/long of cities (see GIS shapefile in the folder)
 ```{r LatLong}
 library(raster)
-cities <- tbl_df(shapefile("Solar_Market/US_cities/US_cities.shp")) 
+cities <- tbl_df(shapefile("Analysis_files//US_cities/US_cities.shp")) 
 cities <- cities %>%  plyr::rename(c("ycoord"="LAT")) %>% plyr::rename(c("xcoord"="LONG")) %>% 
   filter(CLASS=="city") %>% dplyr::select(NAME, ST, LAT, LONG)
 ```
@@ -93,7 +93,7 @@ df <- cities
 df <- df%>% plyr::rename(c("Market_Potential_Index"="Solar Market Potential index"))%>%
   plyr::rename(c("Market_Potential"="Market Potential Level")) %>% 
   plyr::rename(c("Price"="Electricity Price (Cents per KW)"))
-map <- shapefile("Solar_Market//US_cities/US_cities.shp")
+map <- shapefile("Analysis_files/US_cities/US_cities.shp")
 map <- merge(map, df)
 
 map1 <- map[,c(1,2, 54, 57,58)]
@@ -126,7 +126,7 @@ poten_cities <- poten_cities[order(-poten_cities$Potential),]#order cities accor
 ```
 The resulting dataframe:
 ```{r tweattable, echo=F}
-load('Solar_Market/potencities.rda')
+load('Analysis_files/potencities.rda')
 poten_cities
 ```
 

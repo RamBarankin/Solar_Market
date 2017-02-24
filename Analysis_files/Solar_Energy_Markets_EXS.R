@@ -6,7 +6,7 @@ library(dplyr)
 # Dataset 1 - latlong (shpfile download and added lat/long in GIS)
 #source: http://www.arcgis.com/home/item.html?id=4e02a13f5ec6412bb56bd8d3dadd59dd
 library(raster)
-cities <- tbl_df(shapefile("Solar_Market//US_cities/US_cities.shp")) 
+cities <- tbl_df(shapefile("Analysis_files/US_cities/US_cities.shp")) 
 cities <- cities %>%  plyr::rename(c("ycoord"="LAT")) %>% plyr::rename(c("xcoord"="LONG")) %>% 
   filter(CLASS=="city") %>% dplyr::select(NAME, ST, LAT, LONG)
 
@@ -74,7 +74,7 @@ poten_cities <- poten_cities[order(-poten_cities$Potential),]
 poten_cities
 library(plotly)
 poten_cities$NAME <- factor(poten_cities$NAME, levels = poten_cities[["NAME"]])
-save(poten_cities, file = 'Solar_Market/potencities.rda')
+save(poten_cities, file = 'Analysis_files/potencities.rda')
 p <- plot_ly(poten_cities, x=~poten_cities$NAME ,y=~poten_cities$Potential, type="bar", 
         marker = list(color = 'rgb(158,202,225)', range ("-1", "-0.5", "Mean", "0.5", "1"),
                       line = list(color = 'rgb(8,48,107)', width = 1.5))) %>%
