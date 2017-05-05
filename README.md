@@ -1,6 +1,6 @@
 # Solar_Market
-An exercise in R: finding solar markets for investment, using:
-- web tables
+An exercise I developed in R: finding solar markets for investment, using:
+- Web tables
 - GIS analysis
 - Twitter 
 - Interactive visualization using maptools and plotly.
